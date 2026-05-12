@@ -91,6 +91,17 @@
      {:title "Template"
       :schema {:properties [:logseq.property/template-applied-to]}}
 
+     ;; Schema meta-tag. User classes that extend (directly or transitively)
+     ;; :logseq.class/Schema are "schema-graded" — they participate in the
+     ;; LinkML export and their property refinements (pattern, min/max, etc.)
+     ;; are emitted as constraints in the generated LinkML/Pydantic.
+     ;;
+     ;; Refinement validators still apply to any class that uses a property
+     ;; with refinement constraints set — the Schema marker is purely about
+     ;; which classes get exported.
+     :logseq.class/Schema
+     {:title "Schema"}
+
      ;; TODO: Add more classes such as :book, :paper, :movie, :music, :project)
      )))
 
@@ -164,6 +175,16 @@
       (recur (mapcat :logseq.property.class/extends extends)
              (into result extends))
       (reverse (distinct result)))))
+
+(defn schema-graded?
+  "Returns true when a class extends :logseq.class/Schema (transitively).
+   Used by the LinkML exporter to decide which user classes to lift into
+   the generated schema. The Schema tag itself is not graded — being graded
+   means having Schema as a strict ancestor."
+  [class]
+  (when (de/entity? class)
+    (boolean (some #(= :logseq.class/Schema (:db/ident %))
+                   (get-class-extends class)))))
 
 (defn create-user-class-ident-from-name
   "Creates a class :db/ident for a default user namespace.

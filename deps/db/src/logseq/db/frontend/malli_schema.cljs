@@ -85,6 +85,62 @@
   (or (contains? db-property/db-attribute-properties ident)
       (contains? logseq-ident-namespaces (namespace ident))))
 
+(defn- refinement-scalar
+  "Lift the user-visible scalar out of a property value. For ref types the
+   actual string/number lives on the pointed-at entity; for non-ref types
+   the value is already scalar."
+  [db property-type val]
+  (cond
+    (number? val) val
+    (boolean? val) val
+    (string? val) val
+    :else
+    (when-let [ent (d/entity db val)]
+      (case property-type
+        (:default :url) (:block/title ent)
+        :number         (:logseq.property/value ent)
+        nil))))
+
+(defn validate-refinements
+  "Check the fork-added refinement constraints on `property` against `val`.
+   Returns true if all set constraints pass (or none are set). Logs a
+   console warning and returns false on the first violation. `:required?`
+   is *not* checked here — its enforcement happens at the property-binding
+   level, not the value level."
+  [db property val]
+  (let [type (:logseq.property/type property)
+        v (refinement-scalar db type val)
+        re (:logseq.property.refinement/pattern property)
+        min-v (:logseq.property.refinement/min-value property)
+        max-v (:logseq.property.refinement/max-value property)
+        min-l (:logseq.property.refinement/min-length property)
+        max-l (:logseq.property.refinement/max-length property)
+        kind  (:logseq.property.refinement/numeric-kind property)
+        literal (:logseq.property.refinement/literal property)
+        violations
+        (cond-> []
+          (and re (string? v) (not (re-find (re-pattern re) v)))
+          (conj :pattern)
+          (and (number? min-v) (number? v) (< v min-v))
+          (conj :below-min)
+          (and (number? max-v) (number? v) (> v max-v))
+          (conj :above-max)
+          (and (number? min-l) (string? v) (< (count v) min-l))
+          (conj :too-short)
+          (and (number? max-l) (string? v) (> (count v) max-l))
+          (conj :too-long)
+          (and (= "int" kind) (number? v) (not (integer? v)))
+          (conj :not-integer)
+          (and literal (not= literal (if (number? v) (str v) v)))
+          (conj :not-literal))]
+    (if (seq violations)
+      (do (js/console.warn "Refinement violations"
+                           (str (:db/ident property))
+                           (pr-str v)
+                           (clj->js violations))
+          false)
+      true)))
+
 (defn validate-property-value
   "Validates the property value in a property tuple. The property value is
   expected to be a coll if the property has a :many cardinality. validate-fn is
@@ -110,11 +166,20 @@
                                  (when-not result
                                    (js/console.error (str "Error: not a closed value, id: " val ", existing choices: " ids ", property: " (:db/ident property))))
                                  result)))
-                        validate-fn')]
+                        validate-fn')
+        ;; Apply refinement constraints last. Empty-placeholder values
+        ;; bypass refinements (placeholder means "not set yet"); new
+        ;; closed values bypass them too because the constraint applies
+        ;; to the *use* of the value, not to declaring it as an option.
+        validate-fn''' (fn refinement-valid? [val]
+                         (and (validate-fn'' val)
+                              (or new-closed-value?
+                                  (empty-placeholder-value? db property val)
+                                  (validate-refinements db property val))))]
     (if (db-property/many? property)
-      (or (every? validate-fn'' property-val)
+      (or (every? validate-fn''' property-val)
           (empty-placeholder-value? db property (first property-val)))
-      (or (validate-fn'' property-val)
+      (or (validate-fn''' property-val)
           ;; also valid if value is empty-placeholder
           (empty-placeholder-value? db property property-val)))))
 

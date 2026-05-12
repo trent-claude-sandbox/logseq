@@ -750,6 +750,112 @@
             :ok-label (t :ui/confirm)})
           (p/then remove!)))))
 
+;; --- Refinement sub-panes -----------------------------------------------
+;;
+;; Each lets the user set one of the eight optional refinement properties
+;; declared in `logseq.db.frontend.property/built-in-properties` under the
+;; :logseq.property.refinement/* namespace. They write straight through
+;; `db-property-handler/set-block-property!` to the property entity itself,
+;; so the constraint is durable and surfaces in the EDN/LinkML export.
+;;
+;; All eight follow the same shape: a labeled input wired to its property
+;; ident. The Malli validator in `logseq.db.frontend.malli-schema` reads
+;; them on every value edit.
+
+(defn- set-refinement!
+  [property ident value]
+  (db-property-handler/set-block-property! (:db/id property) ident value))
+
+(defn- clear-refinement!
+  [property ident]
+  (db-property-handler/remove-block-property! (:db/id property) ident))
+
+(rum/defc refinement-text-input
+  "Generic text-input sub-pane for string refinements (pattern, literal).
+   Empty input clears the constraint."
+  [property {:keys [ident placeholder]}]
+  (let [current (get property ident)
+        [val set-val!] (rum/use-state (or current ""))]
+    [:div.ls-property-dropdown.p-2.flex.flex-col.gap-2
+     {:style {:min-width "260px"}}
+     (shui/input
+      {:size "sm"
+       :default-value current
+       :placeholder placeholder
+       :on-change (fn [^js e] (set-val! (util/trim-safe (util/evalue e))))})
+     [:div.flex.justify-end.gap-2
+      (shui/button
+       {:size "sm" :variant :ghost
+        :on-click (fn [] (clear-refinement! property ident))}
+       (t :ui/reset))
+      (shui/button
+       {:size "sm"
+        :on-click (fn []
+                    (if (string/blank? val)
+                      (clear-refinement! property ident)
+                      (set-refinement! property ident val)))}
+       (t :ui/save))]]))
+
+(rum/defc refinement-number-input
+  "Generic number-input sub-pane (min/max value, min/max length)."
+  [property {:keys [ident placeholder]}]
+  (let [current (get property ident)
+        [val set-val!] (rum/use-state (when current (str current)))]
+    [:div.ls-property-dropdown.p-2.flex.flex-col.gap-2
+     {:style {:min-width "260px"}}
+     (shui/input
+      {:size "sm"
+       :type "number"
+       :default-value (when current (str current))
+       :placeholder placeholder
+       :on-change (fn [^js e] (set-val! (util/trim-safe (util/evalue e))))})
+     [:div.flex.justify-end.gap-2
+      (shui/button
+       {:size "sm" :variant :ghost
+        :on-click (fn [] (clear-refinement! property ident))}
+       (t :ui/reset))
+      (shui/button
+       {:size "sm"
+        :on-click (fn []
+                    (if (or (nil? val) (string/blank? val))
+                      (clear-refinement! property ident)
+                      (let [n (js/parseFloat val)]
+                        (when-not (js/isNaN n)
+                          (set-refinement! property ident n)))))}
+       (t :ui/save))]]))
+
+(rum/defc refinement-numeric-kind-sub-pane
+  "Segmented control for the numeric-kind refinement."
+  [property _ops]
+  (let [current (:logseq.property.refinement/numeric-kind property)]
+    [:div.ls-property-dropdown.p-2.flex.flex-col.gap-2
+     {:style {:min-width "260px"}}
+     [:div.flex.gap-2
+      (for [k ["int" "float" "decimal"]]
+        (shui/button
+         {:key k
+          :size "sm"
+          :variant (if (= current k) :default :outline)
+          :on-click (fn [] (set-refinement! property :logseq.property.refinement/numeric-kind k))}
+         k))]
+     [:div.flex.justify-end
+      (shui/button
+       {:size "sm" :variant :ghost
+        :on-click (fn [] (clear-refinement! property :logseq.property.refinement/numeric-kind))}
+       (t :ui/reset))]]))
+
+(defn- refinement-summary
+  "Compact one-line summary for a refinement value, shown beside the menu
+   item title. Empty string when unset (the menu item still shows; clicking
+   opens the sub-pane to set it)."
+  [val]
+  (cond
+    (nil? val)    ""
+    (boolean? val) (if val "on" "")
+    :else (str val)))
+
+;; --- end refinement sub-panes --------------------------------------------
+
 (rum/defc property-type-sub-pane
   [property {:keys [id set-sub-open! _position]}]
   (let [handle-select! (fn [^js e]
@@ -881,6 +987,107 @@
                                                  :ok-label (t :ui/confirm)})
                                                (p/then update-cardinality-fn))
                                            (update-cardinality-fn))))})))
+
+      ;; --- Refinements group ----------------------------------------------
+      ;; Show the eight LinkML-compatible refinement controls, gated per
+      ;; property type. The group renders only on user properties (built-ins
+      ;; have their own semantics already).
+      (when (and (not built-in?)
+                 (not special-built-in-prop?)
+                 property-type)
+        (let [text-type? (contains? #{:default :url} property-type)
+              num-type?  (= :number property-type)
+              refinements
+              (->>
+               [(shui/dropdown-menu-separator)
+                [:h3.font-medium.px-2.py-1.opacity-60.text-xs
+                 (t :property/refinements)]
+
+                (when text-type?
+                  (dropdown-editor-menuitem
+                   {:icon :regex
+                    :title (t :property/refinement-pattern)
+                    :desc (refinement-summary (:logseq.property.refinement/pattern property))
+                    :disabled? config/publishing?
+                    :submenu-content (fn [_ops]
+                                       (refinement-text-input property
+                                                              {:ident :logseq.property.refinement/pattern
+                                                               :placeholder "^[a-z]+$"}))}))
+
+                (when num-type?
+                  (dropdown-editor-menuitem
+                   {:icon :arrow-down :title (t :property/refinement-min-value)
+                    :desc (refinement-summary (:logseq.property.refinement/min-value property))
+                    :disabled? config/publishing?
+                    :submenu-content (fn [_ops]
+                                       (refinement-number-input property
+                                                                {:ident :logseq.property.refinement/min-value
+                                                                 :placeholder "0"}))}))
+
+                (when num-type?
+                  (dropdown-editor-menuitem
+                   {:icon :arrow-up :title (t :property/refinement-max-value)
+                    :desc (refinement-summary (:logseq.property.refinement/max-value property))
+                    :disabled? config/publishing?
+                    :submenu-content (fn [_ops]
+                                       (refinement-number-input property
+                                                                {:ident :logseq.property.refinement/max-value
+                                                                 :placeholder "100"}))}))
+
+                (when text-type?
+                  (dropdown-editor-menuitem
+                   {:icon :arrow-down :title (t :property/refinement-min-length)
+                    :desc (refinement-summary (:logseq.property.refinement/min-length property))
+                    :disabled? config/publishing?
+                    :submenu-content (fn [_ops]
+                                       (refinement-number-input property
+                                                                {:ident :logseq.property.refinement/min-length
+                                                                 :placeholder "1"}))}))
+
+                (when text-type?
+                  (dropdown-editor-menuitem
+                   {:icon :arrow-up :title (t :property/refinement-max-length)
+                    :desc (refinement-summary (:logseq.property.refinement/max-length property))
+                    :disabled? config/publishing?
+                    :submenu-content (fn [_ops]
+                                       (refinement-number-input property
+                                                                {:ident :logseq.property.refinement/max-length
+                                                                 :placeholder "200"}))}))
+
+                (when num-type?
+                  (dropdown-editor-menuitem
+                   {:icon :calculator
+                    :title (t :property/refinement-numeric-kind)
+                    :desc (refinement-summary (:logseq.property.refinement/numeric-kind property))
+                    :disabled? config/publishing?
+                    :submenu-content (fn [ops] (refinement-numeric-kind-sub-pane property ops))}))
+
+                (dropdown-editor-menuitem
+                 {:icon :equal
+                  :title (t :property/refinement-literal)
+                  :desc (refinement-summary (:logseq.property.refinement/literal property))
+                  :disabled? config/publishing?
+                  :submenu-content (fn [_ops]
+                                     (refinement-text-input property
+                                                            {:ident :logseq.property.refinement/literal
+                                                             :placeholder "exact value"}))})
+
+                (dropdown-editor-menuitem
+                 {:icon :asterisk
+                  :title (t :property/refinement-required)
+                  :toggle-checked? (boolean (:logseq.property.refinement/required? property))
+                  :disabled? config/publishing?
+                  :on-toggle-checked-change
+                  (fn []
+                    (set-refinement! property
+                                     :logseq.property.refinement/required?
+                                     (not (:logseq.property.refinement/required? property))))})]
+               (remove nil?))]
+          ;; Only attach the group when it has something to show beyond the
+          ;; separator + heading. text-type and num-type are mutually
+          ;; exclusive but `literal` + `required?` always show.
+          (when (> (count refinements) 2)
+            refinements)))
 
       (when (and (not= :logseq.property/enable-history? (:db/ident property))
                  (not special-built-in-prop?))

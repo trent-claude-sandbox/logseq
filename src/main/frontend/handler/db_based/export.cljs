@@ -98,3 +98,29 @@
           (.setAttribute anchor "href" data-str)
           (.setAttribute anchor "download" filename)
           (.click anchor))))))
+
+(defn ^:export export-linkml-schema
+  "Walks every class that transitively extends :logseq.class/Schema and
+   emits a LinkML YAML schema covering them. The YAML is copied to the
+   clipboard and downloaded as a file so the user can pipe it to
+   `gen-pydantic` for runtime Pydantic models.
+
+   Surfaced via the export menu in the UI and callable from the JS
+   console as `frontend.handler.db_based.export.export_linkml_schema()`."
+  []
+  (p/let [result (state/<invoke-db-worker :thread-api/export-edn
+                                          (state/get-current-repo)
+                                          {:export-type :linkml})
+          yaml (:yaml result)]
+    (when yaml
+      (.writeText js/navigator.clipboard yaml)
+      (println yaml)
+      (let [repo (state/get-current-repo)
+            data-str (str "data:text/yaml;charset=utf-8,"
+                          (js/encodeURIComponent yaml))
+            filename (file-name repo :yaml)]
+        (when-let [anchor (gdom/getElement "download-as-db-edn")]
+          (.setAttribute anchor "href" data-str)
+          (.setAttribute anchor "download" filename)
+          (.click anchor)))
+      (notification/show! (t :export/linkml-schema-exported) :success))))

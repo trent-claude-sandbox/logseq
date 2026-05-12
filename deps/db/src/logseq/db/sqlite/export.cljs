@@ -14,6 +14,7 @@
             [logseq.db.frontend.content :as db-content]
             [logseq.db.frontend.db :as db-db]
             [logseq.db.frontend.entity-util :as entity-util]
+            [logseq.db.frontend.linkml-export :as linkml-export]
             [logseq.db.frontend.property :as db-property]
             [logseq.db.frontend.schema :as db-schema]
             [logseq.db.frontend.validate :as db-validate]
@@ -1015,16 +1016,23 @@
           (build-selected-nodes-export db (:node-ids options))
           :graph-ontology
           (build-graph-ontology-export db {})
+          :linkml
+          ;; Emits a LinkML YAML string under :yaml. Schema scope is
+          ;; user classes that extend (transitively) :logseq.class/Schema.
+          {:yaml (linkml-export/build-linkml-schema db (:linkml-options options))}
           :graph
           (build-graph-export db (:graph-options options))
           (throw (ex-info (str (pr-str export-type) " is an invalid export-type") {})))
         export-map (patch-invalid-keywords export-map*)]
-    (if (get-in options [:graph-options :catch-validation-errors?])
-      (try
-        (basic-validate-export db export-map options)
-        (catch ExceptionInfo e
-          (println "Caught error:" e)))
-      (basic-validate-export db export-map options))
+    ;; The LinkML export is just a YAML string; the build-EDN validators
+    ;; expect a buildable EDN map shape, so we skip them in that case.
+    (when-not (= :linkml export-type)
+      (if (get-in options [:graph-options :catch-validation-errors?])
+        (try
+          (basic-validate-export db export-map options)
+          (catch ExceptionInfo e
+            (println "Caught error:" e)))
+        (basic-validate-export db export-map options)))
     (assoc export-map ::export-type export-type)))
 
 ;; Import fns

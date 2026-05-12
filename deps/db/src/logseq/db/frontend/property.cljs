@@ -291,6 +291,72 @@
                                                             :cardinality :many
                                                             :hide? true}
                                                    :queryable? false}
+
+     ;; --- Refinement props ----------------------------------------------
+     ;; Eight optional fields that live on a property entity (view-context
+     ;; :property) and tighten what values it accepts. Enforced by the
+     ;; Malli validator on every edit, and emitted as constraints in the
+     ;; LinkML export when the owning class extends :logseq.class/Schema.
+     ;;
+     ;; All eight are :public? true so they show up in the property config
+     ;; dropdown UI, and :view-context :property so they only render on
+     ;; property pages, not on instances.
+     :logseq.property.refinement/pattern
+     {:title "Pattern (regex)"
+      :schema {:type :string
+               :public? true
+               :view-context :property}
+      :properties {:logseq.property/description "Regex the value must match. Applies to text and URL properties."}}
+
+     :logseq.property.refinement/min-value
+     {:title "Minimum value"
+      :schema {:type :raw-number
+               :public? true
+               :view-context :property}
+      :properties {:logseq.property/description "Inclusive lower bound. Applies to number properties."}}
+
+     :logseq.property.refinement/max-value
+     {:title "Maximum value"
+      :schema {:type :raw-number
+               :public? true
+               :view-context :property}
+      :properties {:logseq.property/description "Inclusive upper bound. Applies to number properties."}}
+
+     :logseq.property.refinement/min-length
+     {:title "Minimum length"
+      :schema {:type :raw-number
+               :public? true
+               :view-context :property}
+      :properties {:logseq.property/description "Minimum character count. Applies to text and URL properties."}}
+
+     :logseq.property.refinement/max-length
+     {:title "Maximum length"
+      :schema {:type :raw-number
+               :public? true
+               :view-context :property}
+      :properties {:logseq.property/description "Maximum character count. Applies to text and URL properties."}}
+
+     :logseq.property.refinement/numeric-kind
+     {:title "Numeric kind"
+      :schema {:type :string
+               :public? true
+               :view-context :property}
+      :properties {:logseq.property/description "One of \"int\", \"float\", or \"decimal\". Applies to number properties; controls how the LinkML export types the field."}}
+
+     :logseq.property.refinement/literal
+     {:title "Literal value"
+      :schema {:type :string
+               :public? true
+               :view-context :property}
+      :properties {:logseq.property/description "Single fixed value. Emitted as Pydantic Literal[…] in the LinkML export."}}
+
+     :logseq.property.refinement/required?
+     {:title "Required (strict)"
+      :schema {:type :checkbox
+               :public? true
+               :view-context :property}
+      :properties {:logseq.property/description "When set, the value must be present (no default fallback). Enforced on save and in the LinkML export."}}
+
      ;; Task props
      :logseq.property/status {:title "Status"
                               :schema
@@ -692,7 +758,9 @@
     "logseq.property.journal" "logseq.property.class" "logseq.property.view"
     "logseq.property.user" "logseq.property.history"
     "logseq.property.reaction" "logseq.property.sync" "logseq.property.publish"
-    "logseq.property.recycle"})
+    "logseq.property.recycle"
+    ;; Refinement constraints on user properties — used by the LinkML export
+    "logseq.property.refinement"})
 
 (defn logseq-property?
   "Determines if keyword is a logseq property"
