@@ -6,14 +6,15 @@
   // the size.
   "image": "mcr.microsoft.com/devcontainers/universal:2",
 
-  // Pin pnpm to the version pnpm-lock.yaml expects, then install deps.
-  // Runs once on container creation; cached on subsequent starts.
-  "postCreateCommand": "corepack enable && corepack prepare pnpm@10.33.0 --activate && pnpm install --frozen-lockfile",
+  // Pin pnpm, install the Clojure CLI (universal:2 has Java 21 + Node 22
+  // but no clj), and install JS deps. Runs once on container creation.
+  "postCreateCommand": "bash -c 'set -e; corepack enable; corepack prepare pnpm@10.33.0 --activate; if ! command -v clojure >/dev/null; then curl -fsSL https://download.clojure.org/install/linux-install-1.12.0.1530.sh -o /tmp/clj.sh; chmod +x /tmp/clj.sh; sudo /tmp/clj.sh; fi; pnpm install --frozen-lockfile'",
 
-  // Run on every start (including resumes). Launches shadow-cljs + gulp +
-  // webpack in the background; output tails to /tmp/dev.log so we can
-  // inspect it via `gh codespace ssh`.
-  "postStartCommand": "cd /workspaces/logseq && rm -f /tmp/dev.log && nohup pnpm watch > /tmp/dev.log 2>&1 & disown",
+  // Every start: launch the watch pipeline in the background. The codespace
+  // agent runs this via `/bin/sh -c` (dash), so we re-exec under bash to
+  // get backgrounding + nohup semantics. </dev/null detaches the shell so
+  // the agent doesn't wait on the pipe.
+  "postStartCommand": "bash -c 'cd /workspaces/logseq && rm -f /tmp/dev.log && nohup pnpm watch > /tmp/dev.log 2>&1 </dev/null &'",
 
   "forwardPorts": [3001],
   "portsAttributes": {
