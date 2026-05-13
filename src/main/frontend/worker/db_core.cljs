@@ -48,6 +48,7 @@
    [logseq.db.sqlite.build :as sqlite-build]
    [logseq.db.sqlite.create-graph :as sqlite-create-graph]
    [logseq.db.sqlite.demo-content :as demo-content]
+   [logseq.db.sqlite.linkml-docs :as linkml-docs]
    [logseq.db.sqlite.linkml-import :as linkml-import]
    [logseq.db.sqlite.export :as sqlite-export]
    [logseq.db.sqlite.gc :as sqlite-gc]
@@ -472,12 +473,14 @@
                                     (ldb/transact! conn initial-data
                                                    {:initial-db? true})))
               ;; For a brand-new local graph (no import, no remote download)
-              ;; seed the Reading-Queue demo so users land in a non-empty
-              ;; sketchpad. Idempotent and safe to delete.
+              ;; seed the Reading-Queue demo + LinkML doc pages so users
+              ;; land in a non-empty sketchpad with context. Both seeds
+              ;; are idempotent + safe to delete.
               _ (when (and initial-tx-report
                            (not (:import-type opts))
                            (not creating-remote-graph?))
-                  (demo-content/seed! conn))]
+                  (demo-content/seed! conn)
+                  (linkml-docs/seed! conn))]
           (when-not sync-download-graph?
             (db-migrate/migrate conn)
             (gc-sqlite-dbs! db conn {})
