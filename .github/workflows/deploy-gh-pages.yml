@@ -1,0 +1,107 @@
+name: Deploy DB Web App to GitHub Pages
+
+# Deploys the Logseq web app as a static site to GitHub Pages.
+# URL: https://trent-claude-sandbox.github.io/logseq/
+#
+# Each visitor's graph data lives in their own browser's OPFS (Origin Private
+# File System) backed by SQLite-wasm — i.e. local-app semantics. Nothing is
+# shared across visitors; clearing site data wipes their graph.
+#
+# Asset paths are coerced to relative (`./js`) so the site works from the
+# `/logseq/` project sub-path. The release :db-worker asset-path is also
+# overridden to local — upstream points at https://asset.logseq.com.
+
+on:
+  push:
+    branches: [claude/logseq-spec-sketchpad-D6Oy2]
+  workflow_dispatch:
+
+env:
+  CLOJURE_VERSION: "1.12.4.1618"
+  NODE_VERSION: "24"
+  JAVA_VERSION: "21"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with: { distribution: zulu, java-version: "${{ env.JAVA_VERSION }}" }
+
+      - uses: actions/setup-node@v4
+        with: { node-version: "${{ env.NODE_VERSION }}" }
+
+      - uses: pnpm/action-setup@v4
+        with: { version: "10.33.0" }
+
+      - uses: DeLaGuardo/setup-clojure@13.5
+        with: { cli: "${{ env.CLOJURE_VERSION }}" }
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/pnpm/store
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Cache Clojure/Maven deps
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.m2
+            ~/.gitlibs
+            ~/.deps.clj
+          key: ${{ runner.os }}-cljdeps-${{ hashFiles('deps.edn', 'shadow-cljs.edn') }}
+
+      - name: Install pnpm deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Build static site
+        env:
+          # GH Pages serves project sites under /<repo>/. Override the
+          # shadow-cljs `:asset-path` so chunk loads + worker imports use
+          # paths relative to index.html instead of an absolute root.
+          SHADOW_ASSET_PATH: "./js"
+        run: |
+          set -euo pipefail
+          pnpm gulp:build
+          clojure -M:cljs release app db-worker \
+            --config-merge "{:builds {:app {:asset-path \"$SHADOW_ASSET_PATH\"} :db-worker {:asset-path \"$SHADOW_ASSET_PATH\" :release {:asset-path \"$SHADOW_ASSET_PATH\"}}}}"
+          pnpm webpack-app-build
+
+          # Assemble the site root from ./static/.
+          rsync -avz \
+            --exclude node_modules \
+            --exclude android --exclude ios --exclude mobile \
+            ./static/ ./public/
+
+          # Strip source maps (size + private code).
+          find ./public -name "*.map" -delete
+
+          # GH Pages ignores files prefixed with `_` unless this is set.
+          touch ./public/.nojekyll
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./public
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
