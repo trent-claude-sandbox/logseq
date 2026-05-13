@@ -10,7 +10,10 @@
       "version": "21",
       "installGradle": "false",
       "installMaven": "false"
-    }
+    },
+    // sshd is what `gh codespace ssh` and `gh codespace logs` talk to.
+    // Without it those commands fail with "failed to start SSH server".
+    "ghcr.io/devcontainers/features/sshd:1": { "version": "latest" }
   },
   // First-time setup: pin pnpm to the version the repo expects, drop
   // Clojure CLI in /usr/local/bin, install JS deps.
