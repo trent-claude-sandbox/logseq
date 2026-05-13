@@ -2292,8 +2292,10 @@
           (t :block/practice))
          [:div (t :block/practice-cards)])])
      (when-let [property (:logseq.property/created-from-property block)]
-       (when-let [message (when (= :url (:logseq.property/type property))
-                            (first (outliner-property/validate-property-value (db/get-db) property (:db/id block))))]
+       ;; Warning icon for any validation failure: URL type-check, refinement
+       ;; constraint violations (pattern, min/max, etc.). Used to gate on
+       ;; `:url` only; refinements made the surface broader.
+       (when-let [message (first (outliner-property/validate-property-value (db/get-db) property (:db/id block)))]
          (ui/tooltip
           (shui/button
            {:size :sm

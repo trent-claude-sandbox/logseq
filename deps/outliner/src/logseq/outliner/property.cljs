@@ -256,8 +256,14 @@
   [db property value]
   (let [property-type (:logseq.property/type property)
         many? (= :db.cardinality/many (:db/cardinality property))
-        schema (get-property-value-schema db property-type property)]
-    (validate-property-value-aux schema value {:many? many?})))
+        schema (get-property-value-schema db property-type property)
+        base-errors (validate-property-value-aux schema value {:many? many?})
+        ;; Add refinement-specific messages so the UI tooltip can show
+        ;; "must be ≤ 50000" instead of the generic type complaint.
+        refinement-errors (when value (db-malli-schema/explain-refinements db property value))]
+    (concat (when (coll? base-errors) base-errors)
+            (when-not (coll? base-errors) (some-> base-errors list))
+            refinement-errors)))
 
 (defn- validate!
   "Validates `data` against `schema`.

@@ -101,12 +101,11 @@
         :number         (:logseq.property/value ent)
         nil))))
 
-(defn validate-refinements
-  "Check the fork-added refinement constraints on `property` against `val`.
-   Returns true if all set constraints pass (or none are set). Logs a
-   console warning and returns false on the first violation. `:required?`
-   is *not* checked here — its enforcement happens at the property-binding
-   level, not the value level."
+(defn explain-refinements
+  "Return a list of humanized failure messages for `val` against the
+   refinement constraints on `property`. Empty list means the value
+   passes every set constraint. `:required?` is checked elsewhere
+   (property-binding level), not here."
   [db property val]
   (let [type (:logseq.property/type property)
         v (refinement-scalar db type val)
@@ -116,27 +115,34 @@
         min-l (:logseq.property.refinement/min-length property)
         max-l (:logseq.property.refinement/max-length property)
         kind  (:logseq.property.refinement/numeric-kind property)
-        literal (:logseq.property.refinement/literal property)
-        violations
-        (cond-> []
-          (and re (string? v) (not (re-find (re-pattern re) v)))
-          (conj :pattern)
-          (and (number? min-v) (number? v) (< v min-v))
-          (conj :below-min)
-          (and (number? max-v) (number? v) (> v max-v))
-          (conj :above-max)
-          (and (number? min-l) (string? v) (< (count v) min-l))
-          (conj :too-short)
-          (and (number? max-l) (string? v) (> (count v) max-l))
-          (conj :too-long)
-          (and (= "int" kind) (number? v) (not (integer? v)))
-          (conj :not-integer)
-          (and literal (not= literal (if (number? v) (str v) v)))
-          (conj :not-literal))]
+        literal (:logseq.property.refinement/literal property)]
+    (cond-> []
+      (and re (string? v) (not (re-find (re-pattern re) v)))
+      (conj (str "must match pattern " (pr-str re)))
+      (and (number? min-v) (number? v) (< v min-v))
+      (conj (str "must be ≥ " min-v))
+      (and (number? max-v) (number? v) (> v max-v))
+      (conj (str "must be ≤ " max-v))
+      (and (number? min-l) (string? v) (< (count v) min-l))
+      (conj (str "must be at least " min-l " character(s) long"))
+      (and (number? max-l) (string? v) (> (count v) max-l))
+      (conj (str "must be at most " max-l " character(s) long"))
+      (and (= "int" kind) (number? v) (not (integer? v)))
+      (conj "must be a whole integer (no decimal part)")
+      (and literal (not= literal (if (number? v) (str v) v)))
+      (conj (str "must equal " (pr-str literal))))))
+
+(defn validate-refinements
+  "Check the fork-added refinement constraints on `property` against `val`.
+   Returns true if all set constraints pass, false otherwise. The
+   companion `explain-refinements` returns humanized error strings for
+   surfacing in the UI."
+  [db property val]
+  (let [violations (explain-refinements db property val)]
     (if (seq violations)
       (do (js/console.warn "Refinement violations"
                            (str (:db/ident property))
-                           (pr-str v)
+                           (pr-str val)
                            (clj->js violations))
           false)
       true)))

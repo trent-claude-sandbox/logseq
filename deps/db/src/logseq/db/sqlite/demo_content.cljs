@@ -125,8 +125,9 @@
     {:page {:block/title "Demo: Schema Sketchpad walkthrough"}
      :blocks
      [{:block/title "👋 This graph is preloaded with a worked example of the spec-sketchpad workflow. Open the **Item**, **Book**, **Article**, or **InProgress** tag pages and look at how they're built."}
+      {:block/title "> The LinkML metamodel is itself written in LinkML — a mark of the language's expressive power and consistency."}
       {:block/title "## What's here"}
-      {:block/title "**Schema-graded classes.** `Item`, `Book`, `Article`, `InProgress` all extend `Schema` (directly or transitively). Only Schema-graded classes appear in the LinkML export."}
+      {:block/title "**Schema-graded classes.** `Item`, `Book`, `Article`, `InProgress` all extend `schema` (directly or transitively). Only schema-graded classes appear in the LinkML export. Any extension chain of `#schema` is a valid schema root — `#schema/base` is itself schema-graded."}
       {:block/title "**Refinement properties.** Open any user property (Title, Author, Page count, URL, Fraction done) and click the gear icon — the dropdown's **Refinements** section shows the per-property pattern / min-max / numeric-kind / required toggles in action."}
       {:block/title "**Instances.** *Gravity's Rainbow*, *Infinite Jest*, *The Bitter Lesson*. Edit any property to see Malli enforcement live in the UI."}
       {:block/title "## Try"}
@@ -136,7 +137,7 @@
       {:block/title "4. Set `fraction-done` to `1.5` — fails (`max-value 1`)."}
       {:block/title "5. Open the JS console and run `frontend.handler.db_based.export$.export_linkml_schema()`. A YAML file downloads + the schema lands on your clipboard. Only the four Schema-graded classes appear in the output."}
       {:block/title "## Adding your own schema"}
-      {:block/title "Make a new tag (`#YourClass`), open its page, set its **Extends** property to `Schema`. Now properties you attach to it inherit the LinkML treatment — refinement controls appear automatically in the property config dropdown."}
+      {:block/title "Make a new tag (`#YourClass`), open its page, set its **Extends** property to `schema`. Now properties you attach to it inherit the LinkML treatment — refinement controls appear automatically in the property config dropdown."}
       {:block/title "Source for this demo: `deps/db/src/logseq/db/sqlite/demo_content.cljs`. Delete this page if you want to start fresh — every demo node above can be deleted or edited freely."}]}]})
 
 (defn seed!

@@ -357,6 +357,13 @@
                :view-context :property}
       :properties {:logseq.property/description "When set, the value must be present (no default fallback). Enforced on save and in the LinkML export."}}
 
+     :logseq.property.refinement/description
+     {:title "Description"
+      :schema {:type :string
+               :public? true
+               :view-context :property}
+      :properties {:logseq.property/description "Human-readable description of the property. Emitted as LinkML `description` and as a slot-level `annotations.description` for downstream tooling."}}
+
      ;; Task props
      :logseq.property/status {:title "Status"
                               :schema

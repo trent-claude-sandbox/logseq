@@ -96,11 +96,16 @@
      ;; LinkML export and their property refinements (pattern, min/max, etc.)
      ;; are emitted as constraints in the generated LinkML/Pydantic.
      ;;
+     ;; The displayed name is the lowercase #schema so user-facing chains
+     ;; read naturally (e.g. `#schema/base` extends `#schema`). The db-ident
+     ;; stays capitalized to follow the namespace convention used by every
+     ;; other built-in class.
+     ;;
      ;; Refinement validators still apply to any class that uses a property
-     ;; with refinement constraints set — the Schema marker is purely about
+     ;; with refinement constraints set — the schema marker is purely about
      ;; which classes get exported.
      :logseq.class/Schema
-     {:title "Schema"}
+     {:title "schema"}
 
      ;; TODO: Add more classes such as :book, :paper, :movie, :music, :project)
      )))
