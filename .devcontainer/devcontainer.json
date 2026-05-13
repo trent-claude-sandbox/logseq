@@ -1,40 +1,24 @@
 {
   "name": "logseq-dev",
-  // The javascript-node image already has Node 22 + corepack; we layer
-  // Java 21 via the official feature, then install Clojure CLI + pnpm
-  // in postCreate. Doing it as features means the second cold-start
-  // is fast (image is cached) and the first is bounded by feature pulls.
-  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-22-bookworm",
-  "features": {
-    "ghcr.io/devcontainers/features/java:1": {
-      "version": "21",
-      "installGradle": "false",
-      "installMaven": "false"
-    },
-    // sshd is what `gh codespace ssh` and `gh codespace logs` talk to.
-    // Without it those commands fail with "failed to start SSH server".
-    "ghcr.io/devcontainers/features/sshd:1": { "version": "latest" }
-  },
-  // First-time setup: pin pnpm to the version the repo expects, drop
-  // Clojure CLI in /usr/local/bin, install JS deps.
-  "postCreateCommand": "set -euo pipefail; corepack enable; corepack prepare pnpm@10.33.0 --activate; curl -fsSL https://download.clojure.org/install/linux-install-1.12.0.1530.sh -o /tmp/clj.sh; chmod +x /tmp/clj.sh; sudo /tmp/clj.sh; pnpm install --frozen-lockfile",
-  // Every start: kick off shadow-cljs + gulp + webpack in the background.
-  // The output is tailed into /tmp/dev.log so we can grep it from outside
-  // the codespace. The `&` + `disown` pattern means the codespace setup
-  // command finishes immediately instead of blocking on the never-ending
-  // watch process.
+  // GitHub's universal Codespaces image. Ships sshd, Node 22, Java 21,
+  // Clojure CLI, pnpm via corepack, and the rest of the standard dev
+  // toolchain. Cached on Codespaces hosts, so cold start is fast despite
+  // the size.
+  "image": "mcr.microsoft.com/devcontainers/universal:2",
+
+  // Pin pnpm to the version pnpm-lock.yaml expects, then install deps.
+  // Runs once on container creation; cached on subsequent starts.
+  "postCreateCommand": "corepack enable && corepack prepare pnpm@10.33.0 --activate && pnpm install --frozen-lockfile",
+
+  // Run on every start (including resumes). Launches shadow-cljs + gulp +
+  // webpack in the background; output tails to /tmp/dev.log so we can
+  // inspect it via `gh codespace ssh`.
   "postStartCommand": "cd /workspaces/logseq && rm -f /tmp/dev.log && nohup pnpm watch > /tmp/dev.log 2>&1 & disown",
+
   "forwardPorts": [3001],
   "portsAttributes": {
-    "3001": {
-      "label": "Logseq dev (live-reload)",
-      "onAutoForward": "openPreview"
-    }
+    "3001": { "label": "Logseq dev (live-reload)", "onAutoForward": "openPreview" }
   },
-  "remoteUser": "node",
-  "hostRequirements": {
-    "cpus": 8,
-    "memory": "32gb",
-    "storage": "64gb"
-  }
+
+  "hostRequirements": { "cpus": 8, "memory": "32gb", "storage": "64gb" }
 }
