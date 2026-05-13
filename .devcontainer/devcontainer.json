@@ -10,11 +10,11 @@
   // but no clj), and install JS deps. Runs once on container creation.
   "postCreateCommand": "bash -c 'set -e; corepack enable; corepack prepare pnpm@10.33.0 --activate; if ! command -v clojure >/dev/null; then curl -fsSL https://download.clojure.org/install/linux-install-1.12.0.1530.sh -o /tmp/clj.sh; chmod +x /tmp/clj.sh; sudo /tmp/clj.sh; fi; pnpm install --frozen-lockfile'",
 
-  // Every start: launch the watch pipeline in the background. The codespace
-  // agent runs this via `/bin/sh -c` (dash), so we re-exec under bash to
-  // get backgrounding + nohup semantics. </dev/null detaches the shell so
-  // the agent doesn't wait on the pipe.
-  "postStartCommand": "bash -c 'cd /workspaces/logseq && rm -f /tmp/dev.log && nohup pnpm watch > /tmp/dev.log 2>&1 </dev/null &'",
+  // Every start: launch the watch pipeline in a new session that survives
+  // the agent cleanup. The agent runs this via /bin/sh -c (dash). Plain
+  // `nohup ... &` gets reaped when the agent's shell exits; setsid -f
+  // forks into a new session so the watch process keeps running.
+  "postStartCommand": "/bin/sh -c 'cd /workspaces/logseq && rm -f /tmp/dev.log && setsid -f sh -c \"exec pnpm watch >>/tmp/dev.log 2>&1\" </dev/null'",
 
   "forwardPorts": [3001],
   "portsAttributes": {
