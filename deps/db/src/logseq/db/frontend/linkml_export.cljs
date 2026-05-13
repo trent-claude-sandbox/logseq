@@ -245,6 +245,69 @@
 
 ;; -- top-level ------------------------------------------------------------
 
+;; -- Mermaid ER diagram -------------------------------------------------
+;;
+;; Mirrors the output of LinkML's `gen-erdiagram` generator: a Mermaid
+;; erDiagram with one box per class (slots inside it) and one line per
+;; node-typed slot (edge from owner to target class with cardinality).
+;; The output is plain markdown-fenced Mermaid that Logseq renders inline
+;; when pasted into a block, and that GitHub / docs sites render too.
+
+(defn- mermaid-slot-line
+  "Per-slot Mermaid line: indented `<range> <name> [PK] [\"description\"]`."
+  [prop]
+  (let [type-name (case (slot-range prop)
+                    "integer"  "int"
+                    "decimal"  "decimal"
+                    "float"    "float"
+                    "string"   "string"
+                    "boolean"  "boolean"
+                    "datetime" "datetime"
+                    "uri"      "string"
+                    (slot-range prop))
+        nm (property-name prop)
+        desc (when-let [d (:logseq.property.refinement/description prop)]
+               (str " \"" (string/replace d "\"" "'") "\""))]
+    (str "    " type-name " " nm desc)))
+
+(defn- mermaid-edge
+  "Per node-typed slot: an edge from `owner-class` to the slot's target.
+   Cardinality follows Mermaid's `||--o{` style: single-required source,
+   zero-or-many target (only one we can infer from Logseq without
+   inverse-slot info)."
+  [owner-class prop]
+  (when (and (= :node (:logseq.property/type prop))
+             (seq (:logseq.property/classes prop)))
+    (let [target (-> prop :logseq.property/classes first :block/title safe-name)]
+      (str "  " (class-name owner-class) " ||--o{ " target " : "
+           (pr-str (property-name prop))))))
+
+(defn build-er-diagram
+  "Emit a Mermaid erDiagram string covering every schema-graded class
+   and its slots. Suitable for pasting into a Logseq block, GitHub
+   README, or docs site."
+  [db]
+  (let [classes (schema-graded-classes db)
+        class-blocks
+        (->> classes
+             (map (fn [c]
+                    (let [slots (->> (:logseq.property.class/properties c)
+                                     (filter de/entity?))]
+                      (str (class-name c) " {\n"
+                           (string/join "\n" (map mermaid-slot-line slots))
+                           "\n  }"))))
+             (string/join "\n  "))
+        edges
+        (->> classes
+             (mapcat (fn [c]
+                       (->> (:logseq.property.class/properties c)
+                            (filter de/entity?)
+                            (keep #(mermaid-edge c %)))))
+             distinct)]
+    (str "erDiagram\n"
+         (when (seq classes) (str "  " class-blocks "\n"))
+         (when (seq edges) (str (string/join "\n" edges) "\n")))))
+
 (defn build-linkml-schema
   "Returns a YAML string. `opts` may carry :schema-id and :schema-name to
    override the defaults."

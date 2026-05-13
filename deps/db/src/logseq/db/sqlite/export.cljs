@@ -1020,13 +1020,17 @@
           ;; Emits a LinkML YAML string under :yaml. Schema scope is
           ;; user classes that extend (transitively) :logseq.class/Schema.
           {:yaml (linkml-export/build-linkml-schema db (:linkml-options options))}
+          :linkml-erdiagram
+          ;; Emits a Mermaid erDiagram string covering schema-graded
+          ;; classes. Mirrors `gen-erdiagram` from the LinkML CLI.
+          {:mermaid (linkml-export/build-er-diagram db)}
           :graph
           (build-graph-export db (:graph-options options))
           (throw (ex-info (str (pr-str export-type) " is an invalid export-type") {})))
         export-map (patch-invalid-keywords export-map*)]
-    ;; The LinkML export is just a YAML string; the build-EDN validators
-    ;; expect a buildable EDN map shape, so we skip them in that case.
-    (when-not (= :linkml export-type)
+    ;; The LinkML exports are just text artifacts; the build-EDN validators
+    ;; expect a buildable EDN map shape, so we skip them in those cases.
+    (when-not (contains? #{:linkml :linkml-erdiagram} export-type)
       (if (get-in options [:graph-options :catch-validation-errors?])
         (try
           (basic-validate-export db export-map options)

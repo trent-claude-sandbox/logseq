@@ -194,6 +194,38 @@ async function main() {
   }
   log('export', `clipboard length=${result.yaml?.length}`);
 
+  // 5. Confirm the new handlers (import + ER diagram) are reachable too.
+  const sibling = await page.evaluate(() => {
+    const ns = window.frontend?.handler?.db_based?.export$;
+    return {
+      importFn: typeof ns?.import_linkml_schema === 'function',
+      erFn:     typeof ns?.export_linkml_er_diagram === 'function',
+    };
+  });
+  log('handlers', JSON.stringify(sibling));
+  if (!sibling.importFn || !sibling.erFn) {
+    await fail(page, 'sibling-handlers', new Error('import or ER-diagram handler missing'));
+  }
+
+  // 6. Round-trip a tiny LinkML schema via import_linkml_schema, then
+  //    re-run the export and check the imported class appears.
+  const TUTORIAL_YAML = `id: https://example.org/test\nname: test\nclasses:\n  TestClass:\n    attributes:\n      title:\n        required: true\n      score:\n        range: integer\n        minimum_value: 0\n        maximum_value: 100`;
+  const round = await page.evaluate(async (yaml) => {
+    const ns = window.frontend?.handler?.db_based?.export$;
+    try {
+      const imp = await ns.import_linkml_schema(yaml);
+      await ns.export_linkml_schema();
+      const out = await navigator.clipboard.readText();
+      return { ok: true, imp, found: out.includes('TestClass') };
+    } catch (e) {
+      return { ok: false, err: e.message };
+    }
+  }, TUTORIAL_YAML);
+  log('roundtrip', JSON.stringify(round));
+  if (!round.ok || !round.found) {
+    await fail(page, 'roundtrip', new Error('LinkML import → export roundtrip failed'));
+  }
+
   // 4. Inspect the YAML.
   const expectedMarkers = [
     'id: ',

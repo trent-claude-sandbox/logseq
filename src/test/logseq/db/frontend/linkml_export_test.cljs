@@ -64,6 +64,13 @@
       ;; But no user class shows up.
       (is (not (string/includes? yaml "JustAClass"))))))
 
+(deftest er-diagram-emits-mermaid-with-schema-graded-classes
+  (testing "build-er-diagram produces a Mermaid erDiagram covering the seeded classes"
+    (let [yaml (linkml-export/build-er-diagram @(build-conn))]
+      (is (string/starts-with? yaml "erDiagram"))
+      (is (string/includes? yaml "SchemaGradedThing"))
+      (is (not (string/includes? yaml "UnrelatedThing"))))))
+
 (deftest pattern-combines-with-length
   (testing "When both a regex pattern AND length bounds are set, the emitted pattern wraps both via lookahead"
     (let [conn (db-test/create-conn-with-blocks

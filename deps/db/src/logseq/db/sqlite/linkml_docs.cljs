@@ -128,7 +128,38 @@
       {:block/title "**Validating a whole subgraph.** From the JS console: `frontend.handler.db_based.export.export_linkml_schema()` produces YAML and `gen-pydantic schema.yaml > models.py` (run externally) gives you a Pydantic runtime gate. You can then `Model.model_validate(instance_dict)` over every exported instance for the cross-class invariants the Malli layer can't express."}
       {:block/title "**Validate-on-save deeper integration (open question).** The user-facing `Save invalid anyway` escape hatch is not yet wired. The TODO is to capture refusal events as `#linkml/validation-failure` nodes that link back to the offending property+value so the user can browse a queue of issues rather than fighting individual edits."}]}
 
-    ;; ----- 12. Schema-driven data migration (research) ----------------
+    ;; ----- 12. Property-on-property (edge properties) ----------------
+    {:page {:block/title "LinkML: property-on-property (edge/slot annotations)"
+            :build/tags [:LinkmlDoc]}
+     :blocks
+     [{:block/title "LinkML calls them **slot annotations** (or, on a class-bound slot, **slot_usage**). The general idea: not just the *value* of a slot can carry metadata, but *the slot itself* can. Use cases: a regex constraint, a description, a unit hint, a UI label, a `relational_role` for SQL mapping."}
+      {:block/title "**Logseq's native expression of this** is already property-on-property. Every entity in Logseq — including property entities — can carry properties. The `:logseq.property.refinement/*` keys are themselves property-on-property: `pattern`, `min-value`, `max-value`, `numeric-kind`, `literal`, `required?`, `description` are all properties **of** the property they refine."}
+      {:block/title "**How to use it.** Open any user property page → click the gear icon → the `Refinements` group shows the property-on-property controls. Set values there; they live as datoms on the property entity and survive both EDN export and the LinkML emitter."}
+      {:block/title "**LinkML modeling guide for the same shape:** https://linkml.io/linkml/howtos/model-property-graphs.html"}
+      {:block/title "**Future work.** Edge properties between two *instances* (rather than slot annotations) require a different mechanism — a `LinkRecord` class or sqlite-build's `:build/edges`. Tracked separately."}]}
+
+    ;; ----- 13. ER-diagram export ------------------------------------
+    {:page {:block/title "LinkML: ER-diagram export (Mermaid)"
+            :build/tags [:LinkmlDoc]}
+     :blocks
+     [{:block/title "**`gen-erdiagram`** is one of LinkML's standard generators; it produces a Mermaid `erDiagram` block from a schema. This fork has the equivalent in-app:"}
+      {:block/title "```\nfrontend.handler.db_based.export.export_linkml_er_diagram()\n```"}
+      {:block/title "Run that from the JS console. The Mermaid text is copied to the clipboard and downloaded as a `.mmd` file. Paste it into any Logseq block to render the diagram inline; commit it to a README to render on GitHub."}
+      {:block/title "**Coverage.** One box per schema-graded class with its slot list (range + name + description); one `||--o{` edge per node-typed slot. Class hierarchy (`is_a`, `mixins`) is implicit in the slot inheritance and not drawn separately — for richer hierarchy diagrams, fall back to LinkML's own `gen-erdiagram` Python tool over the YAML."}
+      {:block/title "**Logseq's #asset pattern.** The exported `.mmd` follows the same data-URL download convention as the LinkML YAML and graph-ontology EDN exports. A dedicated `#asset` storage attachment is a future improvement — for now the file is yours to commit wherever you want."}
+      {:block/title "Source: https://linkml.io/linkml/generators/erdiagram.html"}]}
+
+    ;; ----- 14. Auto-expanded schema definitions (design note) --------
+    {:page {:block/title "Design note: auto-expanded schema definitions on tag pages"
+            :build/tags [:LinkmlDoc]}
+     :blocks
+     [{:block/title "**Goal.** When you open a schema-graded class's tag page, the slot list + refinements + parent chain should be visible at a glance — no clicking around required."}
+      {:block/title "**What exists today.** Logseq's tag pages show the class's slots in a properties panel + a Children list. Refinement details require clicking the gear icon per property."}
+      {:block/title "**Proposed change.** On any tag whose extends chain transitively includes `#schema`, render a `Schema definition` block at the top of the page. The block shows: is_a chain, slot list with type + key refinements (required, pattern, min/max) inline, and a `Open as LinkML / Open as ER diagram` action row. Default-expanded; collapsible."}
+      {:block/title "**Implementation sketch.** Add a Rum component `schema-summary-block` in `frontend.components.class`. Mount it at the top of the class-page renderer (`components/page.cljs`) when `db-class/schema-graded?` returns true. Source the data via the existing class entity + `:logseq.property.class/properties` traversal — no new datoms needed. Tested via the same Playwright e2e harness."}
+      {:block/title "**Not yet implemented in this branch.** Documented here so the next iteration doesn't relitigate the question."}]}
+
+    ;; ----- 15. Schema-driven data migration (research) ----------------
     {:page {:block/title "Open question: schema-driven data migration"
             :build/tags [:LinkmlDoc]}
      :blocks

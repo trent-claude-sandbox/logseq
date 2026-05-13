@@ -100,6 +100,30 @@
           (.setAttribute anchor "download" filename)
           (.click anchor))))))
 
+(defn ^:export export-linkml-er-diagram
+  "Walks every schema-graded class and emits a Mermaid `erDiagram`
+   covering them. Mirrors LinkML's `gen-erdiagram` CLI. The Mermaid
+   text is copied to the clipboard and downloaded as a `.mmd` file so
+   it can be opened in any Mermaid renderer or pasted directly into a
+   Logseq block (which renders Mermaid blocks inline)."
+  []
+  (p/let [result (state/<invoke-db-worker :thread-api/export-edn
+                                          (state/get-current-repo)
+                                          {:export-type :linkml-erdiagram})
+          mermaid (:mermaid result)]
+    (when mermaid
+      (.writeText js/navigator.clipboard mermaid)
+      (println mermaid)
+      (let [repo (state/get-current-repo)
+            data-str (str "data:text/plain;charset=utf-8,"
+                          (js/encodeURIComponent mermaid))
+            filename (file-name repo :mmd)]
+        (when-let [anchor (gdom/getElement "download-as-db-edn")]
+          (.setAttribute anchor "href" data-str)
+          (.setAttribute anchor "download" filename)
+          (.click anchor)))
+      (notification/show! "Exported LinkML ER diagram (Mermaid) to clipboard + download." :success))))
+
 (defn ^:export import-linkml-schema
   "Parse a LinkML YAML string and materialize every class/slot/enum in
    it as schema-graded Logseq nodes. Each imported class extends
