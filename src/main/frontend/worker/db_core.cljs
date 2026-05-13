@@ -46,6 +46,7 @@
    [logseq.db.frontend.entity-util :as entity-util]
    [logseq.db.frontend.schema :as db-schema]
    [logseq.db.sqlite.create-graph :as sqlite-create-graph]
+   [logseq.db.sqlite.demo-content :as demo-content]
    [logseq.db.sqlite.export :as sqlite-export]
    [logseq.db.sqlite.gc :as sqlite-gc]
    [logseq.db.sqlite.util :as sqlite-util]
@@ -467,7 +468,14 @@
                                         initial-data (sqlite-create-graph/build-db-initial-data
                                                       config (select-keys opts [:import-type :graph-git-sha :creating-remote-graph?]))]
                                     (ldb/transact! conn initial-data
-                                                   {:initial-db? true})))]
+                                                   {:initial-db? true})))
+              ;; For a brand-new local graph (no import, no remote download)
+              ;; seed the Reading-Queue demo so users land in a non-empty
+              ;; sketchpad. Idempotent and safe to delete.
+              _ (when (and initial-tx-report
+                           (not (:import-type opts))
+                           (not creating-remote-graph?))
+                  (demo-content/seed! conn))]
           (when-not sync-download-graph?
             (db-migrate/migrate conn)
             (gc-sqlite-dbs! db conn {})
