@@ -18,7 +18,13 @@
 
   "forwardPorts": [3001],
   "portsAttributes": {
-    "3001": { "label": "Logseq dev (live-reload)", "onAutoForward": "openPreview" }
+    "3001": {
+      "label": "Logseq dev (live-reload)",
+      "onAutoForward": "openPreview",
+      // Codespaces-specific: bakes the port forward at public visibility
+      // so anyone with the URL can hit it without a GH session.
+      "visibility": "public"
+    }
   },
 
   "hostRequirements": { "cpus": 8, "memory": "32gb", "storage": "64gb" }
