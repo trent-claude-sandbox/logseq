@@ -138,6 +138,7 @@
         range' (slot-range prop)
         pat    (compile-pattern prop)
         many?  (= :db.cardinality/many (:db/cardinality prop))
+        desc   (:logseq.property.refinement/description prop)
         slot   (cond-> {:name sname
                         :range range'}
                  many? (assoc :multivalued true)
@@ -146,7 +147,8 @@
                  (assoc :minimum_value (:logseq.property.refinement/min-value prop))
                  (some? (:logseq.property.refinement/max-value prop))
                  (assoc :maximum_value (:logseq.property.refinement/max-value prop))
-                 pat (assoc :pattern pat))
+                 pat (assoc :pattern pat)
+                 desc (assoc :description desc))
         lit-enum (maybe-literal-enum prop sname)
         cv-enum  (when-not lit-enum (maybe-enum-for-slot prop sname))
         enum-pair (or lit-enum cv-enum)
@@ -159,11 +161,19 @@
 (defn- emit-class
   [cls slot-names]
   (let [cname (class-name cls)
-        parent (first (filter #(not= :logseq.class/Schema (:db/ident %))
-                              (:logseq.property.class/extends cls)))
-        parent-name (when parent (class-name parent))]
+        ;; Non-:schema ancestors split into is_a (single, first one wins)
+        ;; vs mixins (the rest). Logseq doesn't natively distinguish; we
+        ;; pick the chain's first parent as is_a and the rest as mixins.
+        all-parents (->> (:logseq.property.class/extends cls)
+                         (remove #(= :logseq.class/Schema (:db/ident %))))
+        is-a-parent (first all-parents)
+        mixin-parents (rest all-parents)
+        desc-val (or (some-> cls :logseq.property/description :block/title)
+                     (:logseq.property/description cls))]
     (cond-> {:name cname}
-      parent-name (assoc :is_a parent-name)
+      is-a-parent (assoc :is_a (class-name is-a-parent))
+      (seq mixin-parents) (assoc :mixins (mapv class-name mixin-parents))
+      desc-val (assoc :description desc-val)
       (seq slot-names) (assoc :slots (vec slot-names)))))
 
 ;; -- walk + collect -------------------------------------------------------

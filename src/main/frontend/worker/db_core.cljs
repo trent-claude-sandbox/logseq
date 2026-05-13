@@ -45,8 +45,10 @@
    [logseq.db.frontend.class :as db-class]
    [logseq.db.frontend.entity-util :as entity-util]
    [logseq.db.frontend.schema :as db-schema]
+   [logseq.db.sqlite.build :as sqlite-build]
    [logseq.db.sqlite.create-graph :as sqlite-create-graph]
    [logseq.db.sqlite.demo-content :as demo-content]
+   [logseq.db.sqlite.linkml-import :as linkml-import]
    [logseq.db.sqlite.export :as sqlite-export]
    [logseq.db.sqlite.gc :as sqlite-gc]
    [logseq.db.sqlite.util :as sqlite-util]
@@ -1192,6 +1194,20 @@
           tx-meta {::sqlite-export/imported-data? true}]
       (ldb/transact! conn tx-data tx-meta)
       {:tx-count (count tx-data)})))
+
+;; Import a LinkML schema (parsed YAML doc, plain map keyed by strings).
+;; Materializes every LinkML class as a schema-graded Logseq class and
+;; every slot as a user property. Implemented as a thread-api so the
+;; caller can be either the UI handler or the JS console export below.
+(def-thread-api :thread-api/import-linkml
+  [repo schema-edn]
+  (let [conn (worker-state/get-datascript-conn repo)]
+    (when-not conn
+      (throw (ex-info "graph not opened" {:code :graph-not-opened :repo repo})))
+    (let [build-edn (linkml-import/schema->sqlite-build-edn schema-edn)]
+      (sqlite-build/create-blocks conn build-edn)
+      {:class-count (count (:classes build-edn))
+       :property-count (count (:properties build-edn))})))
 
 (def-thread-api :thread-api/get-view-data
   [repo view-id option]

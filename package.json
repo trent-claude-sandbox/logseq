@@ -167,6 +167,7 @@
     "html2canvas": "^1.4.1",
     "inter-ui": "^4.1.1",
     "interactjs": "^1.10.27",
+    "js-yaml": "^4.1.0",
     "jszip": "3.10.1",
     "katex": "^0.16.45",
     "keytar": "^7.9.0",

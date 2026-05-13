@@ -1,6 +1,7 @@
 (ns frontend.handler.db-based.export
   "Handles DB graph exports and imports across graphs"
-  (:require [cljs.pprint :as pprint]
+  (:require ["js-yaml" :as yaml]
+            [cljs.pprint :as pprint]
             [clojure.string :as string]
             [frontend.context.i18n :refer [t]]
             [frontend.handler.notification :as notification]
@@ -98,6 +99,28 @@
           (.setAttribute anchor "href" data-str)
           (.setAttribute anchor "download" filename)
           (.click anchor))))))
+
+(defn ^:export import-linkml-schema
+  "Parse a LinkML YAML string and materialize every class/slot/enum in
+   it as schema-graded Logseq nodes. Each imported class extends
+   :logseq.class/Schema so the round-trip back through
+   export-linkml-schema reconstructs the same LinkML output (subject to
+   the feature subset documented in `linkml_import.cljs`).
+
+   Callable from the JS console:
+     frontend.handler.db_based.export.import_linkml_schema(yamlString)
+
+   Returns a promise that resolves to {classCount, propertyCount}."
+  [yaml-string]
+  (p/let [parsed (js->clj (yaml/load yaml-string))
+          result (state/<invoke-db-worker :thread-api/import-linkml
+                                           (state/get-current-repo)
+                                           parsed)]
+    (notification/show!
+     (str "Imported LinkML: " (:class-count result) " classes, "
+          (:property-count result) " properties.")
+     :success)
+    (clj->js result)))
 
 (defn ^:export export-linkml-schema
   "Walks every class that transitively extends :logseq.class/Schema and
