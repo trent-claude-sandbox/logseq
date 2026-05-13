@@ -50,6 +50,7 @@
    [logseq.db.sqlite.demo-content :as demo-content]
    [logseq.db.sqlite.linkml-docs :as linkml-docs]
    [logseq.db.sqlite.linkml-import :as linkml-import]
+   [logseq.db.sqlite.schema-block-parser :as schema-block-parser]
    [logseq.db.sqlite.export :as sqlite-export]
    [logseq.db.sqlite.gc :as sqlite-gc]
    [logseq.db.sqlite.util :as sqlite-util]
@@ -1211,6 +1212,38 @@
       (sqlite-build/create-blocks conn build-edn)
       {:class-count (count (:classes build-edn))
        :property-count (count (:properties build-edn))})))
+
+;; -- Materialize a schema-doc page or root block ---------------------
+;;
+;; Given a block UUID (typically the root of a `#schema-doc` page or a
+;; `#schema` block), assemble its descendant tree, hand it to the parser,
+;; and run sqlite-build/create-blocks on the resulting EDN. Children
+;; classes are auto-extended with :logseq.class/Schema by the parser.
+
+(defn- build-block-subtree
+  "Walk a block + descendants from datascript and return a nested
+   `{:title ... :children [...]}` tree the schema parser accepts."
+  [db root-uuid]
+  (when-let [root (d/entity db [:block/uuid root-uuid])]
+    (letfn [(walk [e]
+              (let [kids (->> (d/datoms db :avet :block/parent (:db/id e))
+                              (map #(d/entity db (:e %)))
+                              (sort-by :block/order)
+                              (mapv walk))]
+                (cond-> {:title (:block/title e)}
+                  (seq kids) (assoc :children kids))))]
+      (walk root))))
+
+(def-thread-api :thread-api/materialize-schema-doc
+  [repo block-uuid]
+  (let [conn (worker-state/get-datascript-conn repo)]
+    (when-not conn
+      (throw (ex-info "graph not opened" {:code :graph-not-opened :repo repo})))
+    (let [tree (build-block-subtree @conn (uuid (str block-uuid)))
+          edn (schema-block-parser/parse-schema-doc tree)]
+      (sqlite-build/create-blocks conn edn)
+      {:class-count (count (:classes edn))
+       :property-count (count (:properties edn))})))
 
 (def-thread-api :thread-api/get-view-data
   [repo view-id option]

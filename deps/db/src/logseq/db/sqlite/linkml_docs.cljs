@@ -149,7 +149,23 @@
       {:block/title "**Logseq's #asset pattern.** The exported `.mmd` follows the same data-URL download convention as the LinkML YAML and graph-ontology EDN exports. A dedicated `#asset` storage attachment is a future improvement — for now the file is yours to commit wherever you want."}
       {:block/title "Source: https://linkml.io/linkml/generators/erdiagram.html"}]}
 
-    ;; ----- 14. Auto-expanded schema definitions (design note) --------
+    ;; ----- 14. Nested-block schema authoring + templates --------------
+    {:page {:block/title "Schema authoring: nested blocks + templates"
+            :build/tags [:LinkmlDoc]}
+     :blocks
+     [{:block/title "**Two ways to author a schema in this sketchpad.** Both produce the same downstream data shape (#schema-graded classes + property-attached refinement constraints); they're alternative editing surfaces."}
+      {:block/title "**A. Tag-page authoring (current default).** Make a tag (`#Book`), open its page, click the gear, dial in slots + refinements via the property-config dropdown. Good for incremental tweaks on an established schema."}
+      {:block/title "**B. Nested-block schema-doc authoring.** Author the whole schema as a Logseq block tree in one page, then *materialize* it into real tags + properties. Good for drafting, for translating an existing LinkML YAML, or when block references (`((uuid))`) need to point between schema parts within the same doc."}
+      {:block/title "**Block syntax for nested-block authoring** mirrors LinkML's YAML structure:"}
+      {:block/title "```\n- Book #Class\n  - extends: Item\n  - description: a printed text artifact\n  - slots:\n    - title\n      - type: string\n      - required: true\n      - min-length: 1\n      - max-length: 200\n    - page-count\n      - type: number\n      - numeric-kind: int\n      - min-value: 1\n      - max-value: 50000\n    - tags\n      - type: string\n      - cardinality: many\n```"}
+      {:block/title "**Recognized class metadata keys** (children of a `#Class` block): `extends` (single, or repeatable for mixins), `is_a` + `mixins` (LinkML aliases), `description`, `slots:` (children are slot defs)."}
+      {:block/title "**Recognized slot keys** (children of a slot name block): `type` (string / number / integer / float / decimal / boolean / date / datetime / url / node), `required`, `multivalued` or `cardinality: many`, `pattern`, `min-value` / `max-value`, `min-length` / `max-length`, `numeric-kind` (int / float / decimal), `literal`, `description`."}
+      {:block/title "**Materialize step.** Run `frontend.handler.db_based.export.materialize_schema_doc(blockUuid)` in the JS console (passing the schema-doc page's root block UUID). The slash command `/Materialize schema` is on the roadmap; for now use the JS path."}
+      {:block/title "**Built-in templates.** Type `/template` and pick from: `schema-class` (drops a class stub), `schema-slot-text` / `schema-slot-number` / `schema-slot-date` / `schema-slot-url` / `schema-slot-node` (drop slot stubs with the right type pre-filled). Templates compose with the parser — the materialize step parses whatever block tree is there, including content inserted via templates."}
+      {:block/title "**Block references inside a schema doc.** Inside one schema doc, `extends: ((block-uuid))` and `range: ((block-uuid))` are honored — Logseq's normal `((..))` reference syntax. The materializer dereferences each `(())` to the target block's class name. Across schema-docs, use `[[ClassName]]` (page-name reference) which compiles to a tag reference."}
+      {:block/title "See: *Demo: nested-block schema authoring* (a sibling page that walks through the materialize flow end-to-end)."}]}
+
+    ;; ----- 15. Auto-expanded schema definitions (design note) --------
     {:page {:block/title "Design note: auto-expanded schema definitions on tag pages"
             :build/tags [:LinkmlDoc]}
      :blocks

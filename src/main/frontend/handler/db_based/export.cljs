@@ -124,6 +124,26 @@
           (.click anchor)))
       (notification/show! "Exported LinkML ER diagram (Mermaid) to clipboard + download." :success))))
 
+(defn ^:export materialize-schema-doc
+  "Parse a `#schema-doc` page or `#schema` block into real Logseq classes
+   + user properties. Pass the page/block UUID (a string). Each
+   materialized class auto-extends :logseq.class/Schema so it picks up
+   the LinkML export downstream.
+
+   Designed to be invoked from the slash command `/Materialize schema`
+   (which fills in the current block's UUID) or directly from the JS
+   console:
+     frontend.handler.db_based.export.materialize_schema_doc('uuid-here')"
+  [block-uuid]
+  (p/let [result (state/<invoke-db-worker :thread-api/materialize-schema-doc
+                                           (state/get-current-repo)
+                                           block-uuid)]
+    (notification/show!
+     (str "Materialized: " (:class-count result) " classes, "
+          (:property-count result) " properties.")
+     :success)
+    (clj->js result)))
+
 (defn ^:export import-linkml-schema
   "Parse a LinkML YAML string and materialize every class/slot/enum in
    it as schema-graded Logseq nodes. Each imported class extends

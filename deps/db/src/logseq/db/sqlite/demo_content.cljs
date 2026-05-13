@@ -121,6 +121,92 @@
              :user.property/url "http://incompleteideas.net/IncIdeas/BitterLesson.html"
              :user.property/kind "article"}}}
 
+    ;; -- Schema-authoring templates (#Template-tagged blocks). They show
+    ;; up in `/template` so users can drop schema stubs without manually
+    ;; typing every key. --
+    {:page {:block/title "schema-class.template"
+            :build/tags [:logseq.class/Template]}
+     :blocks
+     [{:block/title "NewClass #Class"
+       :children [{:block/title "extends: schema"}
+                  {:block/title "description: "}
+                  {:block/title "slots:"
+                   :children [{:block/title "first-slot"
+                               :children [{:block/title "type: string"}
+                                          {:block/title "required: true"}]}]}]}]}
+
+    {:page {:block/title "schema-slot-text.template"
+            :build/tags [:logseq.class/Template]}
+     :blocks
+     [{:block/title "new-slot"
+       :children [{:block/title "type: string"}
+                  {:block/title "required: false"}
+                  {:block/title "min-length: 1"}
+                  {:block/title "max-length: 200"}
+                  {:block/title "description: "}]}]}
+
+    {:page {:block/title "schema-slot-number.template"
+            :build/tags [:logseq.class/Template]}
+     :blocks
+     [{:block/title "new-slot"
+       :children [{:block/title "type: number"}
+                  {:block/title "numeric-kind: int"}
+                  {:block/title "min-value: 0"}
+                  {:block/title "max-value: 100"}
+                  {:block/title "description: "}]}]}
+
+    {:page {:block/title "schema-slot-date.template"
+            :build/tags [:logseq.class/Template]}
+     :blocks
+     [{:block/title "new-slot"
+       :children [{:block/title "type: date"}
+                  {:block/title "required: false"}
+                  {:block/title "description: "}]}]}
+
+    {:page {:block/title "schema-slot-url.template"
+            :build/tags [:logseq.class/Template]}
+     :blocks
+     [{:block/title "new-slot"
+       :children [{:block/title "type: url"}
+                  {:block/title "pattern: ^https?://"}
+                  {:block/title "description: "}]}]}
+
+    {:page {:block/title "schema-slot-node.template"
+            :build/tags [:logseq.class/Template]}
+     :blocks
+     [{:block/title "new-slot"
+       :children [{:block/title "type: node"}
+                  {:block/title "description: refers to instances of another #Class — set 'specify node tags' on the materialized property page"}]}]}
+
+    ;; -- Demo: a nested-block schema doc the user can materialize -----
+    {:page {:block/title "Demo: nested-block schema authoring"}
+     :blocks
+     [{:block/title "This page is a *schema-doc* in nested-block form. Each top-level child below is a `#Class` declaration; together they're an alternative way to author the same kind of schema-graded classes you see on the existing `#Item`/`#Book`/`#Article` tag pages. **To turn the blocks below into real classes, run** `frontend.handler.db_based.export.materialize_schema_doc('<this-page-uuid>')` in the JS console. The new classes will show up in your tag picker; instances tagged with them inherit the constraints declared here."}
+      {:block/title "Article2 #Class"
+       :children
+       [{:block/title "extends: schema"}
+        {:block/title "description: A web article worth coming back to — an alternative authoring of the existing #Article."}
+        {:block/title "slots:"
+         :children
+         [{:block/title "title"
+           :children [{:block/title "type: string"}
+                      {:block/title "required: true"}
+                      {:block/title "min-length: 1"}
+                      {:block/title "max-length: 200"}
+                      {:block/title "description: short, scannable title for the queue list"}]}
+          {:block/title "url"
+           :children [{:block/title "type: url"}
+                      {:block/title "pattern: ^https?://"}
+                      {:block/title "required: true"}
+                      {:block/title "description: canonical link to the source"}]}
+          {:block/title "added-on"
+           :children [{:block/title "type: date"}
+                      {:block/title "required: true"}]}
+          {:block/title "tags"
+           :children [{:block/title "type: string"}
+                      {:block/title "cardinality: many"}
+                      {:block/title "description: free-form labels — bring-your-own taxonomy"}]}]}]}]}
+
     ;; -- Walkthrough page --
     {:page {:block/title "Demo: Schema Sketchpad walkthrough"}
      :blocks
