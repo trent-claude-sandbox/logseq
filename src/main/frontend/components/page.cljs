@@ -8,6 +8,7 @@
             [frontend.components.editor :as editor]
             [frontend.components.graph-actions :as graph-actions]
             [frontend.components.library :as library]
+            [frontend.components.class-schema-view :as class-schema-view]
             [frontend.components.objects :as objects]
             [frontend.components.plugins :as plugins]
             [frontend.components.property.config :as property-config]
@@ -401,6 +402,7 @@
       (when class?
         (shui/tabs-content
          {:value "tag"}
+         (class-schema-view/class-schema-view page)
          (on-mounted (objects/class-objects page opts)
                      (:on-tagged-nodes-rendered opts))))
       (when property?
