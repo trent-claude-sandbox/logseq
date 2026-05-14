@@ -9,13 +9,18 @@
    value. Enter/blur commits via `db-property-handler/set-block-property!`
    on the property entity. Cancel via Escape; clear by saving an empty
    value (which un-sets the refinement)."
-  (:require [datascript.impl.entity :as de]
+  (:require [clojure.string :as string]
+            [datascript.core :as d]
+            [datascript.impl.entity :as de]
             [frontend.context.i18n :refer [t]]
             [frontend.db :as db]
             [frontend.handler.db-based.property :as db-property-handler]
+            [frontend.state :as state]
             [logseq.db :as ldb]
             [logseq.db.frontend.class :as db-class]
+            [logseq.outliner.property :as outliner-property]
             [logseq.shui.ui :as shui]
+            [promesa.core :as p]
             [rum.core :as rum]))
 
 ;; -- Per-slot refinement reader -----------------------------------------
@@ -156,12 +161,15 @@
 
    `inherited-from` (when set) tags the slot as inherited and renders
    the rows read-only — the user has to navigate to the parent class
-   page to edit those (matches Logseq's tag-inheritance UX)."
-  [property & {:keys [inherited-from]}]
+   page to edit those (matches Logseq's tag-inheritance UX).
+   `parent-class` (when set) wires the `+ nest` button to the right
+   ParentClass__slot naming."
+  [property & {:keys [inherited-from parent-class]}]
   (let [pname (or (:block/title property)
                   (some-> property :db/ident name))
         rows (if inherited-from (slot-rows property) (editable-refinement-rows property))
-        vals (closed-values property)]
+        vals (closed-values property)
+        already-nested? (= :node (:logseq.property/type property))]
     [:div.ls-cs-slot.py-1
      [:div.flex.items-baseline.gap-2
       [:span.ls-cs-bullet.opacity-50 "•"]
@@ -170,7 +178,11 @@
         (shui/badge
          {:variant :outline :class "text-xs ml-1"}
          (str "from " (or (:block/title inherited-from)
-                          (some-> inherited-from :db/ident name)))))]
+                          (some-> inherited-from :db/ident name)))))
+      (when (and (not inherited-from)
+                 (not already-nested?)
+                 parent-class)
+        (nest-button parent-class property))]
      (when (seq rows)
        [:div.ls-cs-slot-rows.border-l.border-muted.ml-2.pl-2
         (if inherited-from
@@ -217,6 +229,125 @@
            :when (seq a-props)]
        [a a-props]))))
 
+;; -- Promote-to-nested-class affordance ---------------------------------
+;;
+;; "Every substructure within a tag becomes a tag itself" — the user's
+;; original framing. On any slot, the user clicks `+ nest` to:
+;;   1. create a fresh schema-graded class named <Parent>__<slot>
+;;   2. set the slot's type to :node + range to the new class
+;;   3. leave the new class empty; user navigates there to add slots
+;;
+;; The first user-added slot on the new nested class will recursively be
+;; nestable too — the same affordance shows up on every class page.
+
+(defn- nested-class-title
+  "Stable naming convention for a slot's nested class: ParentClass__slot."
+  [parent-class slot-property]
+  (let [parent-name (:block/title parent-class)
+        slot-name (or (:block/title slot-property)
+                      (some-> slot-property :db/ident name))]
+    (str parent-name "__" slot-name)))
+
+(defn- promote-slot-to-nested-class!
+  "Create a nested class for `slot` under `parent-class` and rewire the
+   slot's range to it. Idempotent: if a class with the conventional name
+   already exists, reuse it."
+  [parent-class slot]
+  (let [repo (state/get-current-repo)
+        conn (state/get-db-conn repo)
+        title (nested-class-title parent-class slot)]
+    (when conn
+      (p/let [;; Find or create the nested class.
+              existing (some-> (d/q '[:find ?e .
+                                       :in $ ?t
+                                       :where [?e :block/title ?t]
+                                              [?e :block/tags :logseq.class/Tag]]
+                                     @conn title))
+              new-id (or existing
+                         (let [{:keys [tx-data]}
+                               (ldb/transact!
+                                conn
+                                [{:block/title title
+                                  :block/name (string/lower-case title)
+                                  :block/tags [:logseq.class/Tag]
+                                  :logseq.property.class/extends [:logseq.class/Schema]}])
+                               new-class (->> tx-data
+                                              (filter #(= :block/title (:a %)))
+                                              first :e)]
+                           new-class))]
+        (when new-id
+          (outliner-property/upsert-property!
+           conn (:db/ident slot)
+           {:logseq.property/type :node}
+           {:properties {:logseq.property/classes #{new-id}}}))
+        new-id))))
+
+(rum/defc nest-button
+  [parent-class slot]
+  (shui/button
+   {:size :sm
+    :variant :ghost
+    :class "text-xs h-5 px-1 opacity-60 hover:opacity-100"
+    :on-click (fn [] (promote-slot-to-nested-class! parent-class slot))
+    :title (str "Promote to nested class: " (nested-class-title parent-class slot))}
+   "+ nest"))
+
+;; -- Add-slot affordance ------------------------------------------------
+
+(defn- add-slot-to-class!
+  "Create a new property by user-supplied name and attach it to `class`
+   as a slot. The property starts with type :default; users can change
+   it via the inline kv-row editor (type:) right after creation."
+  [class slot-name]
+  (let [trimmed (some-> slot-name string/trim)
+        repo (state/get-current-repo)
+        conn (state/get-db-conn repo)]
+    (when (and conn class trimmed (not= "" trimmed))
+      (p/let [result (outliner-property/upsert-property!
+                      conn nil
+                      {:logseq.property/type :default}
+                      {:property-name trimmed})
+              new-property-id (:db/id result)]
+        (when new-property-id
+          (outliner-property/class-add-property!
+           conn (:db/id class) (:db/ident result)))
+        result))))
+
+(rum/defcs add-slot-input < rum/reactive
+  (rum/local "" ::draft)
+  (rum/local false ::open?)
+  [state class]
+  (let [open? @(::open? state)
+        commit! (fn []
+                  (when-let [nm @(::draft state)]
+                    (p/let [_ (add-slot-to-class! class nm)]
+                      (reset! (::draft state) "")
+                      (reset! (::open? state) false))))]
+    [:div.ls-cs-add-slot.mt-2.pl-2
+     (if open?
+       [:div.flex.items-baseline.gap-2
+        [:span.ls-cs-bullet.opacity-50 "•"]
+        (shui/input
+         {:size "sm"
+          :auto-focus true
+          :placeholder "new slot name"
+          :class "h-6 w-44 text-xs"
+          :default-value @(::draft state)
+          :on-change (fn [^js e] (reset! (::draft state) (.. e -target -value)))
+          :on-key-down (fn [^js e]
+                         (case (.-key e)
+                           "Enter" (commit!)
+                           "Escape" (do (reset! (::draft state) "")
+                                        (reset! (::open? state) false))
+                           nil))
+          :on-blur commit!})]
+       (shui/button
+        {:size :sm
+         :variant :ghost
+         :class "text-xs h-6"
+         :on-click (fn [] (reset! (::open? state) true))}
+        "+ Add slot"))]))
+
 (rum/defcs class-schema-view < rum/reactive
   "Top-of-page schema summary. Only renders when the class transitively
    extends :logseq.class/Schema."
@@ -241,7 +372,9 @@
          [:div.ls-cs-description.text-sm.italic.opacity-75.mb-2.pl-2 desc-val])
        [:div.ls-cs-slots
         (for [p props]
-          (rum/with-key (slot-block p) (str (:db/ident p))))]
+          (rum/with-key (slot-block p :parent-class class-live)
+            (str (:db/ident p))))]
+       (add-slot-input class-live)
        (when (seq inherited)
          [:div.ls-cs-inherited.mt-3.border-t.pt-2
           [:div.text-xs.text-muted-foreground.font-mono.mb-1 "inherited:"]
